@@ -13,7 +13,7 @@
 <body>
 
 <!-- Reemplaza la URL con el enlace directo a tu canción alojada en GitHub Pages u otro servidor -->
-<audio id="cancion" src="https://github.com/cexrgl09/para-ti-mi-amor/raw/refs/heads/main/musica.mp3" preload="auto"></audio>
+<audio id="cancion" src="https://files.catbox.moe/nu6xgg.mp3" preload="auto"></audio>
 
 <canvas id="lienzo"></canvas>
 <script>
@@ -421,7 +421,7 @@ function arrancar(x, y){
   cv.classList.remove("mano");
 
   // Reproducir tu canción real justo al toque del usuario
-  const musicaReal = new Audio("https://github.com/cexrgl09/para-ti-mi-amor/raw/refs/heads/main/musica.mp3");
+  const musicaReal = new Audio("https://files.catbox.moe/nu6xgg.mp3");
   musicaReal.loop = true;
   musicaReal.play().then(() => {
     console.log("¡Música sonando con éxito en el celular!");
