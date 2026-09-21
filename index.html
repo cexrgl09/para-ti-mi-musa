@@ -13,7 +13,7 @@
 <body>
 
 <!-- Reemplaza la URL con el enlace directo a tu canción alojada en GitHub Pages u otro servidor -->
-<audio id="cancion" src="https://www.w3schools.com/html/horse.mp3" preload="auto"></audio>
+<audio id="cancion" src="https://github.com/cexrgl09/para-ti-mi-amor/raw/refs/heads/main/musica.mp3" preload="auto"></audio>
 
 <canvas id="lienzo"></canvas>
 <script>
@@ -420,15 +420,19 @@ function arrancar(x, y){
   copa.forEach(f => f.viva = true);
   cv.classList.remove("mano");
 
-  // Disparo de audio compatible con navegadores móviles
+  // Reproducción de audio forzada para móviles
   if (audio) {
     audio.currentTime = 0;
-    const p = audio.play();
-    if (p !== undefined) {
-      p.catch(err => {
-        console.log("Reintento de reproducción:", err);
-      });
-    }
+    audio.play().then(() => {
+      console.log("Audio reproducido exitosamente");
+    }).catch(err => {
+      console.log("Error al reproducir audio:", err);
+      // Plan de respaldo: intentar reproducir de nuevo con un evento táctil general si fallara
+      document.addEventListener('touchstart', function playAudioOnce() {
+        audio.play();
+        document.removeEventListener('touchstart', playAudioOnce);
+      }, { once: true });
+    });
   }
 }
 
