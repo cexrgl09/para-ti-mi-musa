@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Feliz Día de las Flores Amarillas — Ariana</title>
+<style>
+  html,body{height:100%;margin:0;padding:0;background:#f7f6f0;overflow:hidden}
+  canvas{display:block;width:100%;height:100%;cursor:default}
+  canvas.mano{cursor:pointer}
+</style>
+</head>
+<body>
+
+<!-- Reemplaza la URL con el enlace directo a tu canción alojada en GitHub Pages u otro servidor -->
+<audio id="cancion" src="https://raw.githubusercontent.com/tu-usuario/tu-repositorio/main/musica.mp3" preload="auto" crossorigin="anonymous"></audio>
+
+<canvas id="lienzo"></canvas>
+<script>
+"use strict";
+
+const cv  = document.getElementById("lienzo");
+const ctx = cv.getContext("2d");
+const audio = document.getElementById("cancion");
+
+/* ============ PALETA ============ */
+const CREMA   = "#f7f6f0";
+const TINTA   = "#111111";
+const VERDE   = "#14603d";
+const PETALO  = "#f2c31c";
+const PETALO2 = "#dfa70e";
+const CENTRO  = "#3d2410";
+const SEMILLA = "#8c2020";
+
+/* ============ TIEMPOS (ms) ============ */
+const T = {
+  caida:       0,
+  caidaDur:  900,
+  arbol:     950,
+  flor:     3200,
+  florFin:  8200,
+  shift:    9000,
+  shiftDur: 2000,
+  textoYlluvia: 9800
+};
+
+/* ============ ESTADO ============ */
+let W, H, DPR;
+let sueloY, baseX, cx, cy, esc, corrimiento, S;
+let botonX, botonY, botonR;
+let ramas = [], copa = [], cayendo = [];
+let fase = "inicio";
+let t0 = 0;
+let ultimaLluvia = 0;
+
+/* ============ SPRITES DE GIRASOL ============ */
+const ROT = 8;
+let sprites = [];
+
+function crearSprites(px){
+  sprites = [];
+  for (let s = 0; s < ROT; s++){
+    const c = document.createElement("canvas");
+    c.width = c.height = px;
+    const g = c.getContext("2d");
+    const R = px / 2;
+    g.translate(R, R);
+    g.rotate((s / ROT) * Math.PI * 2 / 12);
+    for (let capa = 0; capa < 2; capa++){
+      const n = 12, rad = R * (capa ? 0.50 : 0.68);
+      g.fillStyle = capa ? PETALO2 : PETALO;
+      for (let i = 0; i < n; i++){
+        const a = (capa ? Math.PI / n : 0) + (i / n) * Math.PI * 2;
+        g.beginPath();
+        g.ellipse(Math.cos(a) * rad, Math.sin(a) * rad, R * 0.46, R * 0.20, a, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    g.fillStyle = CENTRO;
+    g.beginPath();
+    g.arc(0, 0, R * 0.34, 0, Math.PI * 2);
+    g.fill();
+    sprites.push(c);
+  }
+}
+
+function flor(x, y, r, i, k){
+  if (k <= 0.02) return;
+  const d = r * k * 2;
+  ctx.drawImage(sprites[i & (ROT - 1)], x - d / 2, y - d / 2, d, d);
+}
+
+function florGirada(x, y, r, ang, alfa){
+  ctx.save();
+  ctx.globalAlpha = alfa;
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  ctx.drawImage(sprites[0], -r, -r, r * 2, r * 2);
+  ctx.restore();
+}
+
+/* ============ GEOMETRÍA DEL CORAZÓN ============ */
+const dentro = (x, y) => {
+  const a = x * x + y * y - 1;
+  return a * a * a - x * x * y * y * y <= 0;
+};
+
+function mallaCorazon(objetivo){
+  let paso = Math.sqrt(2.35 / objetivo);
+  const pts = [];
+  for (let gy = -1.25; gy <= 1.25; gy += paso){
+    for (let gx = -1.30; gx <= 1.30; gx += paso){
+      const jx = gx + (Math.random() - 0.5) * paso * 0.5;
+      const jy = gy + (Math.random() - 0.5) * paso * 0.5;
+      if (dentro(jx, jy)) pts.push({ux: jx, uy: jy});
+    }
+  }
+  return {pts, paso};
+}
+
+/* ============ LAYOUT Y SIMETRÍA ============ */
+function medir(){
+  DPR = Math.min(devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  cv.width = W * DPR; cv.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  const angosto = W < 820;
+
+  sueloY = angosto ? H * 0.68 : H * 0.82;
+  esc    = angosto ? Math.min(W * 0.34, H * 0.22) : Math.min(W * 0.21, H * 0.26);
+  
+  cy     = sueloY - esc * 1.55;               
+  cx     = W * 0.5;
+  baseX  = cx;
+  corrimiento = angosto ? 0 : W * 0.20;
+
+  botonX = W * 0.5;
+  botonY = H * 0.44;
+  botonR = Math.min(W, H) * 0.075;
+
+  S = Math.min(W, H) / 900;
+
+  crearSprites(96);
+  construirArbol();
+  construirCopa();
+}
+
+/* ============ ÁRBOL (RAMAS AJUSTADAS DENTRO DE LA COPA) ============ */
+function construirArbol(){
+  ramas = [];
+  const altoTronco = (sueloY - cy) * 0.48; 
+
+  function rama(x, y, ang, len, g1, prof, desde){
+    const x2 = x + Math.cos(ang) * len;
+    const y2 = y + Math.sin(ang) * len;
+    const g2 = g1 * 0.58;
+    const dur = 350 + prof * 75;
+    ramas.push({x1:x, y1:y, x2, y2, g1, g2, desde, dur});
+    if (prof <= 0 || len < 6) return;
+
+    const n = prof === 3 && Math.random() < 0.3 ? 3 : 2;
+    for (let i = 0; i < n; i++){
+      const giro = (i - (n - 1) / 2) * (0.35 + Math.random() * 0.20);
+      rama(x2, y2, ang + giro + (Math.random() - 0.5) * 0.08,
+           len * (0.62 + Math.random() * 0.1), g2, prof - 1, desde + dur * 0.80);
+    }
+  }
+  rama(baseX, sueloY, -Math.PI / 2, altoTronco, esc * 0.060, 3, T.arbol);
+}
+
+function trazarRama(r, p){
+  const x2 = r.x1 + (r.x2 - r.x1) * p;
+  const y2 = r.y1 + (r.y2 - r.y1) * p;
+  const g2 = r.g1 + (r.g2 - r.g1) * p;
+  const a  = Math.atan2(y2 - r.y1, x2 - r.x1) + Math.PI / 2;
+  const ax = Math.cos(a), ay = Math.sin(a);
+  ctx.beginPath();
+  ctx.moveTo(r.x1 + ax * r.g1, r.y1 + ay * r.g1);
+  ctx.lineTo(x2 + ax * g2, y2 + ay * g2);
+  ctx.lineTo(x2 - ax * g2, y2 - ay * g2);
+  ctx.lineTo(r.x1 - ax * r.g1, r.y1 - ay * r.g1);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/* ============ COPA EN FORMA DE CORAZÓN ============ */
+function construirCopa(){
+  const objetivo = innerWidth < 820 ? 800 : 920;
+  const {pts, paso} = mallaCorazon(objetivo);
+  const rFlor = esc * paso * 1.15; // Flores ligeramente más grandes para cubrimiento total
+
+  pts.sort((a, b) => (a.uy - b.uy) * -1 + (Math.abs(a.ux) - Math.abs(b.ux)) * 0.3);
+  pts.reverse();
+
+  const total = pts.length;
+  copa = pts.map((p, i) => ({
+    x: cx + p.ux * esc,
+    y: cy - p.uy * esc,
+    r: rFlor * (0.95 + Math.random() * 0.35),
+    i: (Math.random() * ROT) | 0,
+    nace: T.flor + (i / total) * (T.florFin - T.flor) + Math.random() * 400,
+    viva: true
+  }));
+}
+
+/* ============ SUAVIZADO ============ */
+const suave = p => 1 - Math.pow(1 - p, 3);
+const suaveIO = p => p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const easeInCuad = p => p * p;
+
+/* ============ TEXTOS ============ */
+const CABECERA = "🌻 FELIZ DÍA DE LAS FLORES AMARILLAS 🌻";
+const LINEAS = [
+  "CADA GIRASOL QUE VES AQUÍ ES UN LATIDO",
+  "DE MI CORAZÓN.",
+  "ASÍ COMO EL SOL ILUMINA LOS CAMPOS,",
+  "TÚ ILUMINAS MI VIDA.",
+  "QUE ESTAS FLORES TE RECUERDEN LO ESPECIAL",
+  "QUE ERES PARA MÍ.",
+  "- ¡TE AMO, ARIANA! -"
+];
+const CURSIVA = "Eres el sol que hace florecer cada uno de mis días.";
+
+function revelado(t, desde, texto, msPorLetra){
+  if (t < desde) return 0;
+  return Math.min(texto.length, Math.floor((t - desde) / msPorLetra));
+}
+
+function dibujarTextos(t){
+  const M = W * 0.05;
+  const tCab = T.textoYlluvia;
+  const tMsg = tCab + CABECERA.length * 55 + 400;
+
+  const topCorazonY = cy - esc * 1.25;
+
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left";
+  ctx.fillStyle = TINTA;
+
+  if (t > tCab){
+    ctx.font = `600 ${Math.max(15, 24 * S)}px Georgia, "Times New Roman", serif`;
+    const n = revelado(t, tCab, CABECERA, 55);
+    ctx.fillText(CABECERA.slice(0, n), M, topCorazonY + 30);
+  }
+
+  let reloj = tMsg;
+  if (t > tMsg){
+    const tam = Math.max(13, 19.5 * S);
+    ctx.font = `${tam}px Georgia, "Times New Roman", serif`;
+    let y = topCorazonY + 85;
+    for (const linea of LINEAS){
+      const n = revelado(t, reloj, linea, 45);
+      if (n > 0) ctx.fillText(linea.slice(0, n), M, y);
+      reloj += linea.length * 45 + 380;
+      y += tam * 1.8;
+      if (t < reloj - 380) break;
+    }
+  }
+
+  const tCur = reloj + 500;
+  if (t > tCur){
+    ctx.font = `italic ${Math.max(14, 21 * S)}px Georgia, "Times New Roman", serif`;
+    ctx.fillStyle = "#1c1c1c";
+    const n = revelado(t, tCur, CURSIVA, 42);
+    ctx.fillText(CURSIVA.slice(0, n), M, sueloY - Math.max(18, 26 * S));
+  }
+}
+
+/* ============ BOTÓN DE INICIO ============ */
+function dibujarBoton(ms){
+  const lat = 1 + Math.sin(ms * 0.0025) * 0.03;
+  const r = botonR * lat;
+
+  ctx.save();
+  ctx.translate(botonX, botonY);
+  for (let capa = 0; capa < 2; capa++){
+    const n = 14, rad = r * (capa ? 0.58 : 0.78);
+    ctx.fillStyle = capa ? PETALO2 : PETALO;
+    for (let i = 0; i < n; i++){
+      const a = (capa ? Math.PI / n : 0) + (i / n) * Math.PI * 2 + ms * 0.0002;
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a) * rad, Math.sin(a) * rad, r * 0.40, r * 0.16, a, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.fillStyle = CENTRO;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.52, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  const px = botonX + r * 0.55, py = botonY + r * 0.30;
+  const qx = px + r * 1.35,     qy = py + r * 0.55;
+  ctx.strokeStyle = TINTA;
+  ctx.lineWidth = Math.max(1, r * 0.02);
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.lineTo(qx, qy);
+  ctx.stroke();
+
+  ctx.fillStyle = TINTA;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.font = `${Math.max(13, r * 0.30)}px Georgia, "Times New Roman", serif`;
+  ctx.fillText("Click Aquí", qx + 6, qy);
+}
+
+/* ============ LLUVIA DE GIRASOLES ============ */
+function soltarFlor(desplaz){
+  const vivas = copa.filter(f => f.viva && f.x < cx + esc * 0.4);
+  if (!vivas.length) return;
+  const f = vivas[(Math.random() * vivas.length) | 0];
+  f.viva = false;
+  cayendo.push({
+    x: f.x + desplaz,
+    y: f.y,
+    r: f.r * 1.1,
+    vx: -(0.25 + Math.random() * 0.5),
+    vy: 0.35 + Math.random() * 0.45,
+    ang: Math.random() * 6.28,
+    giro: (Math.random() - 0.5) * 0.02,
+    fase: Math.random() * 6.28
+  });
+}
+
+/* ============ BUCLE PRINCIPAL ============ */
+function bucle(ms){
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = CREMA;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = TINTA;
+  ctx.lineWidth = Math.max(1, 1.6 * S * 2);
+  ctx.beginPath();
+  ctx.moveTo(0, sueloY);
+  ctx.lineTo(W, sueloY);
+  ctx.stroke();
+
+  if (fase === "inicio"){
+    dibujarBoton(ms);
+    requestAnimationFrame(bucle);
+    return;
+  }
+
+  const t = ms - t0;
+
+  const d = t > T.shift
+    ? suaveIO(Math.min(1, (t - T.shift) / T.shiftDur)) * corrimiento
+    : 0;
+
+  ctx.save();
+  ctx.translate(d, 0);
+
+  if (t < T.caidaDur + 120){
+    const p = Math.min(1, t / T.caidaDur);
+    const y = botonY + (sueloY - botonY) * easeInCuad(p);
+    const alfa = t > T.caidaDur ? Math.max(0, 1 - (t - T.caidaDur) / 120) : 1;
+    ctx.globalAlpha = alfa;
+    ctx.fillStyle = SEMILLA;
+    ctx.beginPath();
+    ctx.arc(botonX, y, botonR * 0.11, 0, 6.29);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.fillStyle = VERDE;
+  for (const r of ramas){
+    const p = Math.min(1, Math.max(0, (t - r.desde) / r.dur));
+    if (p > 0) trazarRama(r, p);
+  }
+
+  for (const f of copa){
+    if (!f.viva || t < f.nace) continue;
+    flor(f.x, f.y, f.r, f.i, suave(Math.min(1, (t - f.nace) / 520)));
+  }
+
+  ctx.restore();
+
+  if (t > T.textoYlluvia && ms - ultimaLluvia > 800 && cayendo.length < 16){
+    ultimaLluvia = ms;
+    soltarFlor(d);
+  }
+  for (let i = cayendo.length - 1; i >= 0; i--){
+    const p = cayendo[i];
+    p.vy = Math.min(p.vy + 0.004, 1.4);
+    p.y += p.vy;
+    p.x += p.vx + Math.sin(p.y * 0.012 + p.fase) * 0.55;
+    p.ang += p.giro;
+    const alfa = p.y > sueloY - 60 ? Math.max(0, (sueloY - p.y) / 60) : 1;
+    florGirada(p.x, p.y, p.r, p.ang, alfa);
+    if (p.y > sueloY || p.x < -60) cayendo.splice(i, 1);
+  }
+
+  dibujarTextos(t);
+
+  requestAnimationFrame(bucle);
+}
+
+/* ============ INTERACCIÓN Y DESBLOQUEO DE AUDIO ============ */
+function dentroDelBoton(x, y){
+  return Math.hypot(x - botonX, y - botonY) < botonR * 1.1;
+}
+
+cv.addEventListener("mousemove", e => {
+  if (fase !== "inicio") { cv.classList.remove("mano"); return; }
+  const r = cv.getBoundingClientRect();
+  cv.classList.toggle("mano", dentroDelBoton(e.clientX - r.left, e.clientY - r.top));
+});
+
+function arrancar(x, y){
+  if (fase !== "inicio" || !dentroDelBoton(x, y)) return;
+  fase = "animando";
+  t0 = performance.now();
+  cayendo = [];
+  copa.forEach(f => f.viva = true);
+  cv.classList.remove("mano");
+
+  // Disparo de audio compatible con navegadores móviles
+  if (audio) {
+    audio.currentTime = 0;
+    const p = audio.play();
+    if (p !== undefined) {
+      p.catch(err => {
+        console.log("Reintento de reproducción:", err);
+      });
+    }
+  }
+}
+
+cv.addEventListener("click", e => {
+  const r = cv.getBoundingClientRect();
+  arrancar(e.clientX - r.left, e.clientY - r.top);
+});
+cv.addEventListener("touchstart", e => {
+  const r = cv.getBoundingClientRect();
+  const p = e.touches[0];
+  arrancar(p.clientX - r.left, p.clientY - r.top);
+}, {passive: true});
+
+/* ============ ARRANQUE ============ */
+let redim;
+addEventListener("resize", () => {
+  clearTimeout(redim);
+  redim = setTimeout(() => {
+    const estaba = fase;
+    medir();
+    fase = estaba;
+    if (fase === "animando") cayendo = [];
+  }, 220);
+});
+
+medir();
+requestAnimationFrame(bucle);
+</script>
+</body>
+</html>
