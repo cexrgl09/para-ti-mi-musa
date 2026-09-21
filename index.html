@@ -216,6 +216,10 @@ const LINEAS = [
   "DE MI CORAZÓN.",
   "ASÍ COMO EL SOL ILUMINA LOS CAMPOS,",
   "TÚ ILUMINAS MI VIDA.",
+  "NO TE PODRÉ DAR TUS FLORES HOY",
+  "PERO LA DIFERENCIA DE ESTE DETALLE",
+  "ES QUE ESTAS FLORES NO SE MARCHITAN",
+  "Y LO VAS A TENER SIEMPRE"
   "QUE ESTAS FLORES TE RECUERDEN LO ESPECIAL",
   "QUE ERES PARA MÍ.",
   "    - ¡TE AMO ARIANA! -", 
@@ -261,7 +265,7 @@ function dibujarTextos(t){
 
   const tCur = reloj + 500;
   if (t > tCur){
-    ctx.font = `italic ${Math.max(14, 21 * S)}px Georgia, "Times New Roman", serif`;
+    ctx.font = `600 ${Math.max(14, 21 * S)}px Georgia, "Times New Roman", serif`;
     ctx.fillStyle = "#1c1c1c";
     const n = revelado(t, tCur, CURSIVA, 42);
     ctx.fillText(CURSIVA.slice(0, n), M, sueloY - Math.max(18, 26 * S));
