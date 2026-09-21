@@ -420,22 +420,16 @@ function arrancar(x, y){
   copa.forEach(f => f.viva = true);
   cv.classList.remove("mano");
 
-  // Reproducción de audio forzada para móviles
-  if (audio) {
-    audio.currentTime = 0;
-    audio.play().then(() => {
-      console.log("Audio reproducido exitosamente");
-    }).catch(err => {
-      console.log("Error al reproducir audio:", err);
-      // Plan de respaldo: intentar reproducir de nuevo con un evento táctil general si fallara
-      document.addEventListener('touchstart', function playAudioOnce() {
-        audio.play();
-        document.removeEventListener('touchstart', playAudioOnce);
-      }, { once: true });
-    });
-  }
+  // Reproducir tu canción real justo al toque del usuario
+  const musicaReal = new Audio("https://github.com/cexrgl09/para-ti-mi-amor/raw/refs/heads/main/musica.mp3");
+  musicaReal.loop = true;
+  musicaReal.play().then(() => {
+    console.log("¡Música sonando con éxito en el celular!");
+  }).catch(err => {
+    console.log("Error al reproducir:", err);
+  });
 }
-
+  
 cv.addEventListener("click", e => {
   const r = cv.getBoundingClientRect();
   arrancar(e.clientX - r.left, e.clientY - r.top);
