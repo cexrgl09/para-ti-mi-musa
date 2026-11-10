@@ -12,8 +12,8 @@
 </head>
 <body>
 
-<!-- Reemplaza la URL con el enlace directo a tu canción alojada en GitHub Pages u otro servidor -->
-<audio id="cancion" src="cancion.mp3" preload="auto"></audio>
+<!-- Audio local apuntando a tu archivo -->
+<audio id="cancion" src="cancion.mp3" preload="auto" loop></audio>
 
 <canvas id="lienzo"></canvas>
 <script>
@@ -34,13 +34,13 @@ const SEMILLA = "#8c2020";
 
 /* ============ TIEMPOS (ms) ============ */
 const T = {
-  caida:       0,
-  caidaDur:  900,
-  arbol:     950,
-  flor:     3200,
-  florFin:  8200,
-  shift:    9000,
-  shiftDur: 2000,
+  caida:        0,
+  caidaDur:   900,
+  arbol:      950,
+  flor:      3200,
+  florFin:   8200,
+  shift:     9000,
+  shiftDur:  2000,
   textoYlluvia: 9800
 };
 
@@ -188,7 +188,7 @@ function trazarRama(r, p){
 function construirCopa(){
   const objetivo = innerWidth < 820 ? 800 : 920;
   const {pts, paso} = mallaCorazon(objetivo);
-  const rFlor = esc * paso * 1.15; // Flores ligeramente más grandes para cubrimiento total
+  const rFlor = esc * paso * 1.15;
 
   pts.sort((a, b) => (a.uy - b.uy) * -1 + (Math.abs(a.ux) - Math.abs(b.ux)) * 0.3);
   pts.reverse();
@@ -420,11 +420,9 @@ function arrancar(x, y){
   copa.forEach(f => f.viva = true);
   cv.classList.remove("mano");
 
-  // Reproducir tu canción real justo al toque del usuario
-  const musicaReal = new Audio("https://files.catbox.moe/nu6xgg.mp3");
-  musicaReal.loop = true;
-  musicaReal.play().then(() => {
-    console.log("¡Música sonando con éxito en el celular!");
+  // Reproducir el archivo local corregido
+  audio.play().then(() => {
+    console.log("¡Música local sonando con éxito!");
   }).catch(err => {
     console.log("Error al reproducir:", err);
   });
